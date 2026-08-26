@@ -15,6 +15,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # En macOS/Linux/Windows con CMake >= 3.22 + compilador C++17.
 add_subdirectory(juce)
 
+# MSVC: interpreta las fuentes como UTF-8 (los literales llevan — y ·)
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 # --- Plugin ----------------------------------------------------------------
 
 set(CINELAB_FORMATS VST3 LV2 Standalone)
