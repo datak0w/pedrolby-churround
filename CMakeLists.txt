@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(CineLab VERSION 0.1.0 LANGUAGES C CXX)
+project(CineLab VERSION 0.3.0 LANGUAGES C CXX)
 
 # ---------------------------------------------------------------------------
 #  CineLab — Suite de audio para cine y video (postproducción)
@@ -36,7 +36,7 @@ juce_add_plugin(CineLab
     VENDOR_NAME "PeDROLBY"
     PLUGIN_MANUFACTURER_CODE "PDLB"
     PLUGIN_CODE "Pedr"
-    VERSION "0.2.0"
+    VERSION "0.3.0"
     DESCRIPTION "PeDROLBY Surround - suite de audio para cine y video: EQ de sala (curva X ISO 2969), normalizacion LUFS por estandar de entrega, escenas, simulador de sala (pre-escucha), A/B y masterizacion multicanal (5.1/7.1)."
     PRODUCT_NAME "PeDROLBY Surround"
     COMPANY_NAME "PeDROLBY"
