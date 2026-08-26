@@ -7,6 +7,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write   # para crear releases (gh release create)
+
 jobs:
   linux:
     runs-on: ubuntu-latest
