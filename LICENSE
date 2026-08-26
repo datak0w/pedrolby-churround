@@ -1,0 +1,18 @@
+CineLab — Suite de audio para cine y video
+Copyright (c) 2026 CineLab
+
+Este proyecto usa JUCE bajo su licencia open source. JUCE exige que el
+código que la usa se publique bajo AGPLv3 (o licencia comercial JUCE).
+
+POR TANTO: este proyecto se distribuye bajo la LICENCIA AGPLv3.
+
+Texto completo de la AGPLv3: https://www.gnu.org/licenses/agpl-3.0.html
+
+Resumen de tus derechos:
+  - Usar, modificar y redistribuir el código (incluido el plugin compilado).
+  - Si ofreces este software como servicio en red, debes publicar el código
+    fuente de tu versión a los usuarios de ese servicio.
+  - Debes conservar esta nota de copyright y licencia en derivados.
+
+Para distribución comercial cerrada (binarios propietarios), contacta con
+CineLab para obtener una licencia comercial de JUCE y del plugin.

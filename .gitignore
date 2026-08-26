@@ -1,0 +1,20 @@
+# build
+build/
+build-*/
+CineLab_artefacts/
+install/
+
+# logs / temp
+*.log
+*.deb
+
+# test outputs
+tools/layout_*.png
+tools/*.deb
+tools/gdbtools/
+tools/local/
+
+# editors/OS
+.vscode/
+.idea/
+.DS_Store

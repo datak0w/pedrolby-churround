@@ -1,0 +1,86 @@
+name: build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential \
+            libasound2-dev libx11-dev libxext-dev libxinerama-dev \
+            libxrandr-dev libxcursor-dev libfreetype-dev libfontconfig1-dev \
+            mesa-common-dev libgl1-mesa-dev libegl1-mesa-dev
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build VST3
+        run: cmake --build build --target CineLab_VST3 -j
+      - name: Run DSP tests
+        run: |
+          cmake -S . -B build -DCINELAB_BUILD_TESTS=ON -DCINELAB_LTO=OFF
+          cmake --build build --target CineLabDSPTest CineLabLayoutTest -j
+          ./build/CineLabDSPTest
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PeDROLBY-Surround-Linux
+          path: |
+            build/install/VST3/*.vst3
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure (universal: arm64 + x86_64)
+        run: |
+          cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+      - name: Build VST3 + AU
+        run: |
+          cmake --build build-mac --target CineLab_VST3 -j
+          cmake --build build-mac --target CineLab_AU -j
+      - name: Ad-hoc code sign (local testing; replace with Developer ID for distribution)
+        run: |
+          codesign --force --deep --sign - \
+            "build-mac/CineLab_artefacts/Release/VST3/PeDROLBY Surround.vst3" 2>/dev/null || true
+          codesign --force --deep --sign - \
+            "build-mac/CineLab_artefacts/Release/AU/PeDROLBY Surround.component" 2>/dev/null || true
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp -r "build-mac/CineLab_artefacts/Release/VST3/PeDROLBY Surround.vst3" dist/
+          cp -r "build-mac/CineLab_artefacts/Release/AU/PeDROLBY Surround.component" dist/
+          (cd dist && rm -f ../PeDROLBY-Surround-macOS.zip && zip -ryq9 ../PeDROLBY-Surround-macOS.zip .)
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PeDROLBY-Surround-macOS
+          path: PeDROLBY-Surround-macOS.zip
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        run: cmake -S . -B build-win -DCMAKE_BUILD_TYPE=Release
+      - name: Build VST3
+        run: cmake --build build-win --target CineLab_VST3 --config Release -j
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PeDROLBY-Surround-Windows
+          path: |
+            build-win/CineLab_artefacts/Release/VST3/*.vst3
