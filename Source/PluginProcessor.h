@@ -5,11 +5,13 @@
 #include "Parameters.h"
 #include "Presets.h"
 #include "UserPresets.h"
+#include "dsp/AtmosUpmix.h"
 #include "dsp/BassManager.h"
 #include "dsp/CinemaEQ.h"
 #include "dsp/Downmixer.h"
 #include "dsp/LoudnessMeter.h"
 #include "dsp/LoudnessNormalizer.h"
+#include "dsp/NoiseReduction.h"
 #include "dsp/RoomSimulator.h"
 #include "dsp/SceneModule.h"
 #include "dsp/SimpleLimiter.h"
@@ -81,6 +83,7 @@ public:
     double getNormGainDb() const noexcept { return normalizer.getGainDb(); }
     double getNormAutoDb() const noexcept { return normalizer.getAutoGainDb(); }
     void resetIntegratedMeter() { meter.requestIntegratedReset(); }
+    void resetNoiseProfile() { noiseReduction.requestProfileReset(); }
 
     // Aplicar presets (desde la UI); escribe parámetros con gestures.
     void applyScenePreset (int index) { cinelab::applyScenePresetToParams (parameters.apvts, index); }
@@ -106,7 +109,10 @@ private:
     cinelab::RoomSimulator       roomSim;
     cinelab::Downmixer           downmixer;
     cinelab::BassManager         bassManager;
+    cinelab::NoiseReduction      noiseReduction;
+    cinelab::AtmosUpmix          atmosUpmix;
     int lfeChannelIndex = -1;
+    int reportedLatency  = 0;
 
     // ganancia de salida por canal (surround trasero y LFE)
     std::vector<float> channelGains;

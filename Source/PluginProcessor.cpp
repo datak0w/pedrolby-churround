@@ -75,11 +75,26 @@ void CineLabAudioProcessor::reconfigureChannels (int numChannels)
     cinemaEq.prepare (expectedSampleRate, n);
     sceneModule.prepare (expectedSampleRate, n);
     roomSim.prepare (expectedSampleRate, n);
+    noiseReduction.prepare (expectedSampleRate, n);
+    atmosUpmix.prepare (expectedSampleRate, n);
 
     // pesos de medición + ganancias de mastering por canal
     auto layout = getChannelLayoutOfBus (true, 0);
     std::vector<float> weights ((size_t) n, 1.0f);
     channelGains.assign ((size_t) n, 1.0f);
+
+    // canales de altura (para Atmos upmix)
+    std::vector<int> heightIdx;
+    for (int c = 0; c < n; ++c)
+    {
+        auto t = layout.getTypeOfChannel (c);
+        if (t == AudioChannelSet::topSideLeft  || t == AudioChannelSet::topSideRight
+         || t == AudioChannelSet::topFrontLeft || t == AudioChannelSet::topFrontRight
+         || t == AudioChannelSet::topRearLeft  || t == AudioChannelSet::topRearRight
+         || t == AudioChannelSet::topMiddle)
+            heightIdx.push_back (c);
+    }
+    atmosUpmix.setHeightIndices (heightIdx);
 
     const float rearDb  = parameters.getFloat (IDs::surroundRear);
     const float lfeDb   = parameters.getFloat (IDs::lfeLevel);
@@ -193,6 +208,27 @@ void CineLabAudioProcessor::updateDspParameters (int)
     sim.roomAmount = vts.getRawParameterValue (IDs::eqRoomSize)->load();
     roomSim.setParams (sim);
 
+    // --- Noise reduction (espectral, diálogos de exterior) ------------------
+    NoiseReduction::Params nr;
+    nr.enabled   = vts.getRawParameterValue (IDs::nrEnable)->load() > 0.5f;
+    nr.amount    = vts.getRawParameterValue (IDs::nrAmount)->load();
+    nr.floorDb   = vts.getRawParameterValue (IDs::nrFloor)->load();
+    noiseReduction.setParams (nr);
+
+    // latencia dinámica (el host la compensa al cambiar)
+    const int lat = noiseReduction.isActive() ? noiseReduction.getLatencySamples() : 0;
+    if (lat != reportedLatency)
+    {
+        reportedLatency = lat;
+        setLatencySamples (lat);
+    }
+
+    // --- Atmos upmix (alturas) ----------------------------------------------
+    AtmosUpmix::Params atm;
+    atm.enabled = vts.getRawParameterValue (IDs::atmosEnable)->load() > 0.5f;
+    atm.amount  = vts.getRawParameterValue (IDs::atmosAmount)->load();
+    atmosUpmix.setParams (atm);
+
     // --- Bass management -----------------------------------------------------
     BassManager::Params bm;
     bm.crossoverHz = vts.getRawParameterValue (IDs::bmCrossover)->load();
@@ -233,7 +269,13 @@ void CineLabAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 
     float* const* data = buffer.getArrayOfWritePointers();
 
-    // 4) EQ Cinema (curva X)
+    // 4b) Noise reduction espectral (diálogos de exterior) — lo primero,
+    //     antes de cualquier ecualización
+    if (parameters.apvts.getRawParameterValue (IDs::nrEnable)->load() > 0.5f
+        && noiseReduction.isActive())
+        noiseReduction.processBlock (buffer);
+
+    // 5) EQ Cinema (curva X)
     if (cinemaEq.isActive())
         cinemaEq.process (data, numCh, numSmp);
 
@@ -271,7 +313,13 @@ void CineLabAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     if (parameters.apvts.getRawParameterValue (IDs::limEnable)->load() > 0.5f)
         limiter.processBlock (data, numCh, numSmp);
 
-    // 10) Simulador de sala (monitoring aid, after the limiter)
+    // 10) Atmos upmix (alturas decorreladas desde L/R) — después del
+    //     limitador para no disparar el techo; sin latencia
+    if (parameters.apvts.getRawParameterValue (IDs::atmosEnable)->load() > 0.5f
+        && atmosUpmix.isActive())
+        atmosUpmix.process (data, numCh, numSmp);
+
+    // 11) Simulador de sala (monitoring aid, after the limiter)
     if (parameters.apvts.getRawParameterValue (IDs::simEnable)->load() > 0.5f && roomSim.isActive())
         roomSim.process (data, numCh, numSmp);
 }

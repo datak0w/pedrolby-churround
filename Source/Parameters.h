@@ -57,6 +57,13 @@ namespace IDs
     CINELAB_DECLARE (bmLfeGain);      // LFE gain (dB)
     CINELAB_DECLARE (bmSendToLfe);    // sum main-channel low end into LFE
     CINELAB_DECLARE (bmHpMain);       // high-pass mains (low end only on LFE)
+
+    CINELAB_DECLARE (nrEnable);       // spectral noise reduction
+    CINELAB_DECLARE (nrAmount);       // NR strength (0..1)
+    CINELAB_DECLARE (nrFloor);        // NR max attenuation (dB)
+
+    CINELAB_DECLARE (atmosEnable);    // Atmos-style height upmix
+    CINELAB_DECLARE (atmosAmount);    // space/height amount (0..1)
 #undef CINELAB_DECLARE
 }
 
@@ -151,6 +158,15 @@ struct Parameters
         layout.add (std::make_unique<juce::AudioParameterFloat> (IDs::bmLfeGain,   "Bass LFE gain", linRange (-12.0f, 12.0f, 0.0f), 0.0f));
         layout.add (std::make_unique<juce::AudioParameterBool>  (IDs::bmSendToLfe, "Send low end to LFE", true));
         layout.add (std::make_unique<juce::AudioParameterBool>  (IDs::bmHpMain,    "High-pass mains", false));
+
+        // Noise reduction (spectral, outdoor dialogue)
+        layout.add (std::make_unique<juce::AudioParameterBool>  (IDs::nrEnable, "Noise reduction", false));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (IDs::nrAmount, "NR strength", linRange (0.0f, 1.0f, 0.8f), 0.8f));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (IDs::nrFloor,  "NR floor dB", linRange (-60.0f, -12.0f, -40.0f), -40.0f));
+
+        // Atmos-style height upmix
+        layout.add (std::make_unique<juce::AudioParameterBool>  (IDs::atmosEnable, "Atmos upmix", false));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (IDs::atmosAmount, "Atmos amount", linRange (0.0f, 1.0f, 0.35f), 0.35f));
 
         return layout;
     }

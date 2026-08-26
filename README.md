@@ -108,8 +108,9 @@ PeDROLBY Churround reúne en un solo plugin lo que normalmente exige una
 cadena de varios: **EQ Cinema (curva X ISO 2969)** para salas grandes,
 **normalización de sonoridad por estándar de entrega**, **módulos por
 escena**, **simulador de sala (pre-escucha)**, **A/B**, **downmix 5.1→2.0**,
-**true-peak**, **bass management (graves/LFE)** y **presets de usuario**, con
-dos caras:
+**true-peak**, **bass management (graves/LFE)**, **noise reduction espectral
+para diálogos de exterior**, **Atmos upmix básico (canales de altura)** y
+**presets de usuario**, con dos caras:
 
 | | **Director** (fácil) | **Pro** (full) |
 |---|---|---|
@@ -172,6 +173,18 @@ dos caras:
 - *Bass mgmt*, *Xover Hz* (Linkwitz-Riley 4º orden, 40–300 Hz), *LFE +dB*,
   *Send to LFE*, *HP mains* (todo el bajo al subwoofer). Auto-off en
   estéreo/mono.
+
+**Dialogue NR** (para exteriores)
+- *Dialogue NR*: sustracción espectral (STFT) que aprende el perfil de ruido
+  **solo en las partes silenciosas** (viento, tráfico, hiss).
+- *NR amount* (0..1), *NR floor dB* (máxima atenuación) y **Re-learn noise**
+  para recalibrar en un momento de silencio. Al activarse añade ~43 ms de
+  latencia que el DAW compensa automáticamente.
+
+**Atmos upmix** (básico)
+- *Atmos upmix*: capa de "aire" decorrelada desde L/R (allpass + paso alto,
+  **sin latencia**) → canales de altura (7.1.2/7.1.4/discretos); en estéreo
+  ensancha sutilmente. *Atmos amount* (0..1).
 
 **Downmix 5.1→2.0 y True peak**
 - *Downmix*: L' = L + 0.707·C + 0.707·Ls (+ LFE −6 dB), aplicado **antes**
@@ -257,8 +270,9 @@ una licencia comercial de JUCE.
 
 ## Roadmap
 
-- **v0.1–v0.3 (hecho)**: curva X, normalización por estándar, escenas,
+- **v0.1–v0.4 (hecho)**: curva X, normalización por estándar, escenas,
   medidores, simulador de sala, A/B, surround 5.1/7.1, downmix, true-peak,
-  bass management, presets de usuario, CI + releases automáticas.
-- **v0.4**: gestión de alturas (básico Atmos-upmix), detección automática de
-  escena (IA ligera), presets con carpetas.
+  bass management, presets de usuario, **noise reduction espectral**,
+  **Atmos upmix básico**, CI + releases automáticas.
+- **v0.5**: detección automática de escena (IA ligera), upmix Atmos completo
+  (canales de altura desde las pistas reales), presets con carpetas.

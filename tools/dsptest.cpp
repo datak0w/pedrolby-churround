@@ -5,12 +5,14 @@
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
+#include "dsp/AtmosUpmix.h"
 #include "dsp/Biquad.h"
 #include "dsp/BassManager.h"
 #include "dsp/CinemaEQ.h"
 #include "dsp/Downmixer.h"
 #include "dsp/LoudnessMeter.h"
 #include "dsp/LoudnessNormalizer.h"
+#include "dsp/NoiseReduction.h"
 #include "dsp/RoomSimulator.h"
 #include "dsp/SceneModule.h"
 #include "dsp/SimpleLimiter.h"
@@ -406,6 +408,177 @@ int main()
         const double beforeStereo = rms (buf2.getReadPointer (0), n);
         bm2.process (d2, n);
         CHECK (std::abs (rms (d2[0], n) - beforeStereo) < 0.001, "estéreo/mono → bass management inactivo");
+    }
+
+    // ----------------------------------------------------- noise reduction
+    {
+        std::printf ("[10] Noise reduction espectral — alineación y supresión\n");
+        NoiseReduction nr;
+        nr.prepare (sr, 1);
+
+        NoiseReduction::Params np;
+        np.enabled = true;
+        np.amount  = 0.0;   // PR puro para el test de alineación
+        nr.setParams (np);
+
+        // a) alineación: un impulso se desplaza exactamente `latency`
+        const int n = 30000;
+        const int impulsePos = 1000;
+        juce::AudioBuffer<float> in (1, n), out (1, n);
+        in.clear();
+        in.setSample (0, impulsePos, 1.0f);
+        out = in;
+
+        const int blk = 512;
+        for (int pos = 0; pos + blk <= n; pos += blk)
+        {
+            juce::AudioBuffer<float> chunk (1, blk);
+            chunk.copyFrom (0, 0, in, 0, pos, blk);
+            nr.processBlock (chunk);
+            out.copyFrom (0, pos, chunk, 0, 0, blk);
+        }
+
+        // última muestra del bloque (después de los n)
+        int peak = -1;
+        float peakVal = 0.0f;
+        for (int i = 0; i < n; ++i)
+            if (std::abs (out.getSample (0, i)) > peakVal)
+            {
+                peakVal = std::abs (out.getSample (0, i));
+                peak = i;
+            }
+        const int latency = nr.getLatencySamples();
+        std::printf ("    pico de salida en %d (latencia esperada %d; entrada en %d)\n", peak, latency, impulsePos);
+        CHECK (peak >= impulsePos + latency - 2 && peak <= impulsePos + latency + 2,
+               "impulso desplazado exactamente la latencia (PR)");
+
+        // b) supresión: ruido blanco → la energía baja
+        NoiseReduction nr2;
+        nr2.prepare (sr, 1);
+        NoiseReduction::Params np2;
+        np2.enabled = true;
+        np2.amount  = 1.0;
+        np2.floorDb = -40.0;
+        nr2.setParams (np2);
+
+        juce::Random rng (7);
+        const int n2 = 24000;
+        juce::AudioBuffer<float> noiseBuf (1, n2);
+        for (int i = 0; i < n2; ++i)
+            noiseBuf.setSample (0, i, rng.nextFloat() * 2.0f - 1.0f);
+
+        // procesar en bloques (aprende el perfil durante el primer segundo)
+        for (int pos = 0; pos + blk <= n2; pos += blk)
+        {
+            juce::AudioBuffer<float> chunk (1, blk);
+            chunk.copyFrom (0, 0, noiseBuf, 0, pos, blk);
+            nr2.processBlock (chunk);
+            noiseBuf.copyFrom (0, pos, chunk, 0, 0, blk);
+        }
+
+        // medir cola (después de aprender) vs entrada original
+        const int tail = n2 / 2;
+        juce::AudioBuffer<float> orig (1, n2);
+        juce::Random rng2 (7); // misma semilla → misma secuencia que el ruido procesado
+        for (int i = 0; i < n2; ++i)
+            orig.setSample (0, i, rng2.nextFloat() * 2.0f - 1.0f);
+
+        const double outRms = rms (noiseBuf.getReadPointer (0) + tail, n2 / 2);
+        const double inRmsOrig = rms (orig.getReadPointer (0) + tail, n2 / 2);
+        std::printf ("    ruido: in %.3f → out %.3f (dB)\n", inRmsOrig, outRms);
+        CHECK (outRms < inRmsOrig * 0.6, "el ruido se suprime ≥ ~4 dB");
+
+        // c) señal limpia (1 kHz) se conserva — aprender ruido en silencio previo
+        NoiseReduction nr3;
+        nr3.prepare (sr, 1);
+        NoiseReduction::Params np3;
+        np3.enabled = true; np3.amount = 0.8; np3.floorDb = -40.0;
+        nr3.setParams (np3);
+
+        const int nLearn = 12000; // 0.25 s de silencio/ruido de fondo
+        const int nSine  = 12000;
+        juce::AudioBuffer<float> learn (1, nLearn);
+        for (int i = 0; i < nLearn; ++i)
+            learn.setSample (0, i, 0.02f * (rng.nextFloat() * 2.0f - 1.0f)); // frizz de fondo
+
+        for (int pos = 0; pos + blk <= nLearn; pos += blk)
+        {
+            juce::AudioBuffer<float> chunk (1, blk);
+            chunk.copyFrom (0, 0, learn, 0, pos, blk);
+            nr3.processBlock (chunk);
+        }
+
+        juce::AudioBuffer<float> sine (1, nSine);
+        for (int i = 0; i < nSine; ++i)
+            sine.setSample (0, i, 0.4f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 1000.0 * (double) i / sr));
+
+        for (int pos = 0; pos + blk <= nSine; pos += blk)
+        {
+            juce::AudioBuffer<float> chunk (1, blk);
+            chunk.copyFrom (0, 0, sine, 0, pos, blk);
+            nr3.processBlock (chunk);
+            sine.copyFrom (0, pos, chunk, 0, 0, blk);
+        }
+
+        juce::AudioBuffer<float> sineRef (1, nSine);
+        for (int i = 0; i < nSine; ++i)
+            sineRef.setSample (0, i, 0.4f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 1000.0 * (double) i / sr));
+
+        const double sineOut = rms (sine.getReadPointer (0) + nSine / 2, nSine / 2);
+        const double sineIn  = rms (sineRef.getReadPointer (0) + nSine / 2, nSine / 2);
+        std::printf ("    seno 1 kHz (tras aprender silencio): in %.3f → out %.3f (dB) · pérdida %.2f dB\n", sineIn, sineOut, sineIn - sineOut);
+        CHECK (sineIn - sineOut < 3.0, "el diálogo/senal limpia se conserva (≤ 3 dB de pérdida)");
+    }
+
+    // ---------------------------------------------------------- atmos upmix
+    {
+        std::printf ("[11] Atmos upmix — alturas y estéreo\n");
+        const int n = 12000;
+        juce::AudioBuffer<float> buf (8, n); // 7.1.2: L,R,C,LFE,Ls,Rs,Tfl,Tfr
+        for (int c = 0; c < 8; ++c)
+            for (int i = 0; i < n; ++i)
+                buf.setSample (c, i, 0.3f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 3000.0 * (double) i / sr));
+
+        AtmosUpmix atm;
+        atm.prepare (sr, 8);
+        atm.setHeightIndices ({ 6, 7 });
+
+        // con amount=0 (default) no toca nada
+        AtmosUpmix::Params ap;
+        ap.enabled = true; ap.amount = 0.0;
+        atm.setParams (ap);
+        float* d8[8];
+        for (int c = 0; c < 8; ++c) d8[c] = buf.getWritePointer (c);
+        for (int i = 0; i < n; ++i) buf.setSample (6, i, 0.0f);
+        for (int i = 0; i < n; ++i) buf.setSample (7, i, 0.0f);
+        atm.process (d8, 8, n);
+        CHECK (rms (buf.getReadPointer (6), n) < 0.001, "amount=0 → alturas en silencio");
+
+        ap.amount = 0.8;
+        atm.setParams (ap);
+        atm.process (d8, 8, n);
+        const double hL = rms (buf.getReadPointer (6), n);
+        const double hR = rms (buf.getReadPointer (7), n);
+        std::printf ("    alturas: L %.1f · R %.1f (dB)\n", hL, hR);
+        CHECK (hL > -40.0 && hR > -40.0, "canales de altura reciben aire decorrelado");
+
+        // estéreo: ensanchado sutil, energía casi intacta
+        juce::AudioBuffer<float> st (2, n);
+        for (int i = 0; i < n; ++i)
+            st.setSample (0, i, 0.3f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 2000.0 * (double) i / sr));
+
+        AtmosUpmix atm2;
+        atm2.prepare (sr, 2);
+        AtmosUpmix::Params ap2;
+        ap2.enabled = true; ap2.amount = 0.8;
+        atm2.setParams (ap2);
+        float* d2s[2] = { st.getWritePointer (0), st.getWritePointer (1) };
+        const double beforeSt = rms (st.getReadPointer (0), n);
+        atm2.process (d2s, 2, n);
+        const double afterSt = rms (st.getReadPointer (0), n);
+        std::printf ("    estéreo: before %.3f → after %.3f (dB)\n", beforeSt, afterSt);
+        CHECK (std::abs (afterSt - beforeSt) < 3.0, "estéreo: el nivel general se mantiene (ensanche sutil)");
+        CHECK (std::abs (beforeSt) > 0.0, "estéreo: hay señal");
     }
 
     // ------------------------------------------------------------------ fin

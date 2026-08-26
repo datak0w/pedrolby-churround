@@ -59,6 +59,16 @@ private:
     std::unique_ptr<juce::ToggleButton> bmSendToggle;
     std::unique_ptr<juce::ToggleButton> bmHpToggle;
 
+    // Dialogue noise reduction (spectral)
+    std::unique_ptr<juce::ToggleButton> nrToggle;
+    std::unique_ptr<CineKnob> nrAmountKnob;
+    std::unique_ptr<CineKnob> nrFloorKnob;
+    std::unique_ptr<juce::TextButton> nrResetButton;
+
+    // Atmos upmix (height)
+    std::unique_ptr<juce::ToggleButton> atmosToggle;
+    std::unique_ptr<CineKnob> atmosKnob;
+
     juce::Label autoGainLabel;
     juce::Label grLabel;
 
@@ -71,6 +81,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bmAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bmSendAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bmHpAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> nrAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> atmosAttach;
 };
 
 } // namespace cinelab

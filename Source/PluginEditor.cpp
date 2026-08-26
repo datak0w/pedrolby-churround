@@ -49,7 +49,7 @@ CineLabAudioProcessorEditor::CineLabAudioProcessorEditor (CineLabAudioProcessor&
     // Si un host (REAPER VST3) crea el editor antes de que terminen los
     // children, un setSize temprano dispara resized() con miembros sin crear
     // (nullptr) → crash en Component::setBounds.
-    setSize (980, 600);
+    setSize (980, 660);
 
     // --- tooltips de ayuda ("?") ------------------------------------------
     tooltipWindow = std::make_unique<juce::TooltipWindow> (this, 600);

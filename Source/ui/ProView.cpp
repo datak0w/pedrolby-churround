@@ -182,6 +182,40 @@ ProView::ProView (CineLabAudioProcessor& proc, Parameters& p)
     bmHpAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (parameters.apvts, IDs::bmHpMain, *bmHpToggle);
     addAndMakeVisible (*bmHpToggle);
 
+    // ================= Dialogue noise reduction (spectral) =================
+    nrToggle = std::make_unique<juce::ToggleButton> ("Dialogue NR");
+    nrToggle->setColour (juce::ToggleButton::textColourId, theme::textDim);
+    nrToggle->setColour (juce::ToggleButton::tickColourId, theme::cyan);
+    nrToggle->setTooltip ("Spectral noise reduction for dialogue recorded outdoors (wind, traffic, hiss). Learns the noise floor automatically from the quietest parts and suppresses it. Adds ~43 ms of compensated latency when enabled.");
+    nrAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (parameters.apvts, IDs::nrEnable, *nrToggle);
+    addAndMakeVisible (*nrToggle);
+
+    nrAmountKnob = std::make_unique<CineKnob> ("NR amount", parameters.apvts, IDs::nrAmount,
+                                               "How much spectral oversubtraction to apply (0 = bypass, 1 = strong).");
+    nrFloorKnob  = std::make_unique<CineKnob> ("NR floor dB", parameters.apvts, IDs::nrFloor,
+                                               "Maximum attenuation applied to noisy bins (−60 … −12 dB).");
+    addAndMakeVisible (*nrAmountKnob);
+    addAndMakeVisible (*nrFloorKnob);
+
+    nrResetButton = std::make_unique<juce::TextButton> ("Re-learn noise");
+    nrResetButton->setColour (juce::TextButton::buttonColourId, theme::panelAlt);
+    nrResetButton->setColour (juce::TextButton::textColourOffId, theme::textDim);
+    nrResetButton->setTooltip ("Discard the learned noise profile and re-measure the current noise floor (do this in a quiet part of the recording).");
+    nrResetButton->onClick = [this] { processor.resetNoiseProfile(); };
+    addAndMakeVisible (*nrResetButton);
+
+    // ================= Atmos upmix (height) ================================
+    atmosToggle = std::make_unique<juce::ToggleButton> ("Atmos upmix");
+    atmosToggle->setColour (juce::ToggleButton::textColourId, theme::textDim);
+    atmosToggle->setColour (juce::ToggleButton::tickColourId, theme::accent);
+    atmosToggle->setTooltip ("Atmos-style height: derives a decorrelated air layer from L/R and feeds it to the height channels (7.1.2/7.1.4 and discrete layouts); on stereo it widens subtly. Zero latency.");
+    atmosAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (parameters.apvts, IDs::atmosEnable, *atmosToggle);
+    addAndMakeVisible (*atmosToggle);
+
+    atmosKnob = std::make_unique<CineKnob> ("Atmos amount", parameters.apvts, IDs::atmosAmount,
+                                            "Level of the decorrelated height/air content (0 … 1).");
+    addAndMakeVisible (*atmosKnob);
+
     refresh();
     resized();
 }
@@ -212,63 +246,73 @@ void ProView::paint (juce::Graphics& g)
 {
     g.fillAll (theme::bg);
 
-    theme::drawSectionTitle (g, "Cinema EQ — X-curve (ISO 2969)", juce::Rectangle<int> (20, 174, 280, 18));
-    theme::drawSectionTitle (g, "Scene", juce::Rectangle<int> (360, 174, 200, 18));
-    theme::drawSectionTitle (g, "Delivery · Monitoring · Surround", juce::Rectangle<int> (700, 174, 280, 18));
+    theme::drawSectionTitle (g, "Cinema EQ — X-curve (ISO 2969)", juce::Rectangle<int> (20, 156, 280, 18));
+    theme::drawSectionTitle (g, "Scene · Dialogue NR", juce::Rectangle<int> (360, 156, 220, 18));
+    theme::drawSectionTitle (g, "Delivery · Monitoring · Surround · Atmos", juce::Rectangle<int> (700, 156, 280, 18));
 }
 
 void ProView::resized()
 {
     const int w = getWidth();
-    const int h = getHeight();
+    const int h = getHeight();   // ≈608 (editor 660 − cabecera 52)
 
-    meterPanel->setBounds (20, 16, w - 40, 150);
+    meterPanel->setBounds (20, 16, w - 40, 132);
 
     const int knobSize = 56;
 
     // EQ: 4 columns x 2 rows
     for (int i = 0; i < (int) eqKnobs.size(); ++i)
-        eqKnobs[(size_t) i]->setBounds (20 + (i % 4) * 78, 196 + (i / 4) * (knobSize + 26), knobSize, knobSize);
+        eqKnobs[(size_t) i]->setBounds (20 + (i % 4) * 78, 178 + (i / 4) * (knobSize + 26), knobSize, knobSize);
 
     for (int i = 0; i < (int) roomButtons.size(); ++i)
-        roomButtons[(size_t) i]->setBounds (20 + i * 78, 340, 74, 24);
+        roomButtons[(size_t) i]->setBounds (20 + i * 78, 318, 74, 24);
 
-    // bass management (left column, under the EQ knobs/presets)
-    bmToggle->setBounds     (20, 384, 130, 24);
-    bmXoverKnob->setBounds  (20, 414, knobSize, knobSize);
-    bmLfeKnob->setBounds    (82, 414, knobSize, knobSize);
-    bmSendToggle->setBounds (20, 478, 130, 24);
-    bmHpToggle->setBounds   (20, 508, 130, 24);
+    // bass management (left column, under the EQ zone)
+    bmToggle->setBounds     (20, 352, 130, 24);
+    bmXoverKnob->setBounds  (20, 396, knobSize, knobSize);
+    bmLfeKnob->setBounds    (82, 396, knobSize, knobSize);
+    bmSendToggle->setBounds (20, 462, 130, 24);
+    bmHpToggle->setBounds   (20, 490, 130, 24);
 
     // Scene: 5 columns x 2 rows
     for (int i = 0; i < (int) sceneKnobs.size(); ++i)
-        sceneKnobs[(size_t) i]->setBounds (360 + (i % 5) * 64, 196 + (i / 5) * (knobSize + 26), knobSize, knobSize);
+        sceneKnobs[(size_t) i]->setBounds (360 + (i % 5) * 64, 178 + (i / 5) * (knobSize + 26), knobSize, knobSize);
 
     // Scene presets: 2 compact rows, always LEFT of x=700
     for (int i = 0; i < (int) scenePresetButtons.size(); ++i)
-        scenePresetButtons[(size_t) i]->setBounds (360 + (i % 4) * 76, 340 + (i / 4) * 28, 72, 24);
+        scenePresetButtons[(size_t) i]->setBounds (360 + (i % 4) * 76, 318 + (i / 4) * 28, 72, 24);
+
+    // Dialogue NR (scene column)
+    nrToggle->setBounds     (360, 378, 150, 24);
+    nrAmountKnob->setBounds (360, 420, knobSize, knobSize);
+    nrFloorKnob->setBounds  (422, 420, knobSize, knobSize);
+    nrResetButton->setBounds (486, 422, 116, 22);
+
+    // downmix + true-peak (bottom-left)
+    downmixToggle->setBounds (360, 478, 190, 24);
+    tpToggle->setBounds      (360, 508, 190, 24);
+
+    // Atmos upmix (bottom-left, último hueco)
+    atmosToggle->setBounds (566, 478, 120, 24);
+    atmosKnob->setBounds   (566, 530, knobSize, knobSize);
 
     // ---- right column: Delivery · Monitoring · Surround ----
-    normToggle->setBounds (700, 196, 150, 22);
-    targetKnob->setBounds   (700, 222, knobSize, knobSize);
-    manualGainKnob->setBounds (760, 222, knobSize, knobSize);
+    normToggle->setBounds (700, 178, 150, 22);
+    targetKnob->setBounds   (700, 204, knobSize, knobSize);
+    manualGainKnob->setBounds (760, 204, knobSize, knobSize);
 
-    autoGainLabel.setBounds (700, 284, 256, 18);
+    autoGainLabel.setBounds (700, 266, 256, 18);
 
-    ceilingKnob->setBounds (700, 304, knobSize, knobSize);
-    limToggle->setBounds   (760, 310, 150, 22);
+    ceilingKnob->setBounds (700, 286, knobSize, knobSize);
+    limToggle->setBounds   (760, 292, 150, 22);
 
-    grLabel.setBounds (700, 366, 256, 18);
+    grLabel.setBounds (700, 348, 256, 18);
 
-    simToggle->setBounds (700, 388, 190, 24);
-    abToggle->setBounds  (700, 412, 190, 24);
+    simToggle->setBounds (700, 370, 190, 24);
+    abToggle->setBounds  (700, 394, 190, 24);
 
-    rearKnob->setBounds (700, 436, knobSize, knobSize);
-    lfeKnob->setBounds  (760, 436, knobSize, knobSize);
-
-    // downmix + true-peak (bottom-left free zone, never touching x=700)
-    downmixToggle->setBounds (360, 470, 190, 24);
-    tpToggle->setBounds      (360, 500, 190, 24);
+    rearKnob->setBounds (700, 418, knobSize, knobSize);
+    lfeKnob->setBounds  (760, 418, knobSize, knobSize);
 
     resetButton->setBounds (700, h - 30, 170, 24);
 }
