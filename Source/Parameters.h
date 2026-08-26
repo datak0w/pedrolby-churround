@@ -68,16 +68,18 @@ inline const juce::StringArray sceneNames         { "Dialogue", "SFX", "Foley", 
 inline const juce::StringArray destinationNames   { "Cinema", "TV", "Netflix", "Web", "Podcast", "Manual" };
 
 // ============================================================================
-// Helpers de rango (escala logarítmica para frecuencias).
+// Range helpers (log-ish skew for frequencies). In JUCE 9 the 5th ctor arg
+// of NormalisableRange is `bool symmetricSkew` (no default-value slot), so
+// the repeated `def` parameter exists only for call-site compatibility.
 // ============================================================================
-inline juce::NormalisableRange<float> freqRange (float min, float max, float def)
+inline juce::NormalisableRange<float> freqRange (float min, float max, float = 0.0f)
 {
-    return { min, max, 0.01f, 0.3f, def };
+    return { min, max, 0.01f, 0.3f };
 }
 
-inline juce::NormalisableRange<float> linRange (float min, float max, float def)
+inline juce::NormalisableRange<float> linRange (float min, float max, float = 0.0f)
 {
-    return { min, max, 0.001f, 1.0f, def };
+    return { min, max, 0.001f, 1.0f };
 }
 
 // ============================================================================
