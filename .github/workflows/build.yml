@@ -92,6 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ linux, macos, windows ]
     steps:
+      - uses: actions/checkout@v4     # gh release necesita el contexto git
       - uses: actions/download-artifact@v4
         with:
           name: PeDROLBY-Surround-Linux
